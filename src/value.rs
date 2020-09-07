@@ -22,7 +22,12 @@ pub trait Value {
 
 impl<T: string::ToString + str::FromStr<Err: fmt::Debug> + fmt::Debug> Value for T {
     fn typ(&self) -> &str {
-        std::any::type_name::<T>()
+        let type_name = std::any::type_name::<T>();
+        &type_name[(type_name
+            .rfind(':')
+            .map(|v| v as isize)
+            .unwrap_or_else(|| -1)
+            + 1) as usize..]
     }
 
     fn set(&mut self, val: string::String) -> Result<(), string::String> {
@@ -38,5 +43,17 @@ impl<T: string::ToString + str::FromStr<Err: fmt::Debug> + fmt::Debug> Value for
 
     fn value(&self) -> string::String {
         self.to_string()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn strip_prefix_from_type_name() {
+        let val: Box<dyn Value> = Box::new("".to_string());
+        let type_name = val.typ();
+        assert_eq!(type_name, "String")
     }
 }
