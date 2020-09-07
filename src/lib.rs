@@ -293,7 +293,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.get::<String>("hello"), "world".to_string());
+        assert_eq!(flags.value_of::<String>("hello"), "world".to_string());
     }
 
     #[test]
@@ -305,7 +305,31 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.get::<String>("hello"), "world".to_string());
+        assert_eq!(flags.value_of::<String>("hello"), "world".to_string());
+    }
+
+    #[test]
+    fn parse_long_arg_optional() {
+        let mut flags = FlagSet::new("test");
+        flags.bool("hello", false, "test");
+
+        if let Err(err) = flags.parse(vec!["--hello".to_string()]) {
+            panic!(err);
+        }
+
+        assert_eq!(flags.value_of::<bool>("hello"), true);
+    }
+
+    #[test]
+    fn parse_long_arg_default() {
+        let mut flags = FlagSet::new("test");
+        flags.bool("hello", true, "test");
+
+        if let Err(err) = flags.parse(vec![]) {
+            panic!(err);
+        }
+
+        assert_eq!(flags.value_of::<bool>("hello"), true);
     }
 
     #[test]
