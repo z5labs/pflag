@@ -1,5 +1,5 @@
 [package]
-name = "pflags"
+name = "pflag"
 version = "0.1.0"
 authors = ["Zaba505 <cakub6@gmx.com>"]
 edition = "2018"
