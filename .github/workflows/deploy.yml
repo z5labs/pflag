@@ -10,5 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
     - name: Deploy to crates.io
       run: cargo publish --token="${{ secrets.CRATES_IO_TOKEN }}"
