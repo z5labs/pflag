@@ -273,7 +273,8 @@ impl<'a> FlagSet<'a> {
     builtin_flag_val!(socket_addr_v4, std::net::SocketAddrV4);
     builtin_flag_val!(socket_addr_v6, std::net::SocketAddrV6);
 
-    pub fn get<T: std::str::FromStr<Err: fmt::Debug>>(&self, name: &str) -> T {
+    /// value_of retrieves the value for the given flags name.
+    pub fn value_of<T: std::str::FromStr<Err: fmt::Debug>>(&self, name: &str) -> T {
         let flag = self.formal.get(name).unwrap();
         flag.borrow().value.value().parse().unwrap()
     }
