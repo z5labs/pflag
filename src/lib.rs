@@ -47,6 +47,10 @@ impl<'a> Flag<'a> {
     pub fn set(&mut self, val: String) -> Result<(), String> {
         self.value.set(val)
     }
+
+    fn default_is_zero_value(&self) -> bool {
+        self.def_value == ""
+    }
 }
 
 /// A FlagSet represents a set of defined flags.
@@ -143,7 +147,7 @@ impl<'a> FlagSet<'a> {
     /// visit visits the flags in lexicographical order or in primordial
     /// order if f.SortFlags is false, calling fn for each. It visits only
     /// those flags that have been set.
-    pub fn visit<F: Fn(&Flag)>(&self, f: F) {
+    pub fn visit<F: FnMut(&Flag)>(&self, mut f: F) {
         if self.actual.len() == 0 {
             return;
         }
@@ -154,7 +158,7 @@ impl<'a> FlagSet<'a> {
     /// visit_all visits the flags in lexicographical order or in primordial
     /// order if f.SortFlags is false, calling fn for each. It visits all
     /// flags, even those not set.
-    pub fn visit_all<F: Fn(&Flag)>(&self, f: F) {
+    pub fn visit_all<F: FnMut(&Flag)>(&self, mut f: F) {
         if self.formal.len() == 0 {
             return;
         }
@@ -305,6 +309,102 @@ impl<'a> FlagSet<'a> {
         let flag = self.formal.get(name).unwrap();
         flag.borrow().value.value().parse().unwrap()
     }
+}
+
+impl<'a> fmt::Display for FlagSet<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut buf = String::new();
+        let mut lines: Vec<String> = Vec::new();
+
+        let mut max_len = 0;
+        self.visit_all(|flag| {
+            if flag.hidden {
+                return;
+            }
+
+            let mut line = format!("      --{}", flag.name);
+            if flag.shorthand != "" && flag.shorthand_deprecated == "" {
+                line = format!("  -{}, --{}", flag.shorthand, flag.name);
+            }
+
+            let (varname, usage) = unquote_usage(flag);
+            if varname != "" {
+                line.push_str(&(" ".to_owned() + &varname));
+            }
+            if flag.no_opt_def_value != "" {
+                match flag.value.typ() {
+                    "String" => {}
+                    "bool" => {
+                        if flag.no_opt_def_value != "true" {
+                            line.push_str(&format!("[={}]", flag.no_opt_def_value))
+                        }
+                    }
+                    _ => line.push_str(&format!("[={}]", flag.no_opt_def_value)),
+                }
+            }
+
+            line.push_str("\x00");
+            if line.len() > max_len {
+                max_len = line.len();
+            }
+
+            line.push_str(usage.as_str());
+            if !flag.default_is_zero_value() {
+                match flag.value.typ() {
+                    "String" => line.push_str(&format!(" (default \"{}\")", flag.def_value)),
+                    _ => line.push_str(&format!(" (default {})", flag.def_value)),
+                }
+            }
+            if flag.deprecated.len() > 0 {
+                line.push_str(&format!(" (DEPRECATED: {})", flag.deprecated));
+            }
+
+            lines.push(line);
+        });
+
+        lines.iter().for_each(|line| {
+            let sidx = line.find("\x00").map(|v| v as isize).unwrap_or_else(|| -1);
+            let spacing = " ".repeat((max_len as isize - sidx) as usize);
+            buf.push_str(&line[..sidx as usize]);
+            buf.push(' ');
+            buf.push_str(&spacing);
+            buf.push(' ');
+            buf.push_str(&line[(sidx as usize) + 1..].replace("\n", &"\n".repeat(max_len + 2)));
+            buf.push('\n');
+        });
+
+        f.write_str(buf.as_str())
+    }
+}
+
+fn unquote_usage(flag: &Flag<'_>) -> (String, String) {
+    let usage = flag.usage;
+    for i in 1..usage.len() + 1 {
+        if &usage[i - 1..i] == "`" {
+            for j in i + 1..usage.len() + 1 {
+                if &usage[j - 1..j] == "`" {
+                    let name = &usage[i + 1..j];
+                    let end = &usage[j + 1..];
+                    let mut usage = usage[..i].to_string();
+                    usage.push_str(name);
+                    usage.push_str(end);
+                    return (name.to_string(), usage);
+                }
+            }
+            break;
+        }
+    }
+
+    let mut name = flag.value.typ();
+    match name {
+        "bool" => name = "",
+        "float64" => name = "float",
+        "int64" => name = "int",
+        "uint64" => name = "uint",
+        _ => {}
+    };
+
+    (name.to_string(), usage.to_string())
 }
 
 #[cfg(test)]
