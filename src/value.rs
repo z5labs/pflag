@@ -16,7 +16,7 @@ pub trait Value {
     // all Values are assumed to be strings.
     //
     fn typ(&self) -> &str {
-        return "string";
+        "String"
     }
 }
 
