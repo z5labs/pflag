@@ -1,8 +1,14 @@
 [package]
 name = "pflag"
+description = "A crate implementing POSIX/GNU-style --flags."
 version = "0.1.0"
-authors = ["Zaba505 <cakub6@gmx.com>"]
+keywords = ["command-line", "flags", "args"]
+categories = ["command-line-interface"]
+authors = ["z5labs"]
+homepage = "https://github.com/z5labs/pflag"
+repository = "https://github.com/z5labs/pflag"
 edition = "2018"
+license-file = "LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
