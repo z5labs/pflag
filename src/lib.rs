@@ -140,6 +140,33 @@ impl<'a> FlagSet<'a> {
         self.args.clone()
     }
 
+    /// visit visits the flags in lexicographical order or in primordial
+    /// order if f.SortFlags is false, calling fn for each. It visits only
+    /// those flags that have been set.
+    pub fn visit<F: Fn(&Flag)>(&self, f: F) {
+        if self.actual.len() == 0 {
+            return;
+        }
+
+        self.actual.iter().for_each(|flag| f(&*flag.borrow()));
+    }
+
+    /// visit_all visits the flags in lexicographical order or in primordial
+    /// order if f.SortFlags is false, calling fn for each. It visits all
+    /// flags, even those not set.
+    pub fn visit_all<F: Fn(&Flag)>(&self, f: F) {
+        if self.formal.len() == 0 {
+            return;
+        }
+
+        self.formal.values().for_each(|flag| f(&*flag.borrow()));
+    }
+
+    /// lookup returns the flag structure of the named flag, returning None if none exists.
+    pub fn lookup(&self, name: &str) -> Option<Ref<'_, Flag>> {
+        self.formal.get(name).map(|f| f.borrow())
+    }
+
     /// set sets the value of the named flag.
     pub fn set(&mut self, name: &str, value: &str) -> Result<(), String> {
         let opt = self.formal.get(name);
