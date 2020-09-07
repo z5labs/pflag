@@ -311,6 +311,8 @@ impl<'a> FlagSet<'a> {
     }
 }
 
+/// FlagSet implements fmt::Display to format the
+/// usage for all the flags in the set.
 impl<'a> fmt::Display for FlagSet<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut buf = String::new();
