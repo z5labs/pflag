@@ -4,18 +4,88 @@
 
 mod value;
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::collections::BTreeMap;
+use std::fmt;
 use std::rc::Rc;
 pub use value::Value;
+
+/// A Flag represents the state of a flag.
+pub struct Flag<'a> {
+    /// name as it appears on command line
+    pub name: &'a str,
+
+    /// one-letter abbreviated flag
+    pub shorthand: &'a str,
+
+    /// help message
+    pub usage: &'a str,
+
+    /// value as set
+    pub value: Box<dyn value::Value>,
+
+    /// default value (as text); for usage message
+    pub def_value: &'a str,
+
+    /// If the user set the value (or if left to default)
+    pub changed: bool,
+
+    /// default value (as text); if the flag is on the command line without any options
+    pub no_opt_def_value: &'a str,
+
+    /// If this flag is deprecated, this string is the new or now thing to use
+    pub deprecated: &'a str,
+
+    /// used by cobra.Command to allow flags to be hidden from help/usage text
+    pub hidden: bool,
+
+    /// If the shorthand of this flag is deprecated, this string is the new or now thing to use
+    pub shorthand_deprecated: &'a str,
+}
+
+impl<'a> Flag<'a> {
+    pub fn set(&mut self, val: String) -> Result<(), String> {
+        self.value.set(val)
+    }
+}
 
 /// A FlagSet represents a set of defined flags.
 pub struct FlagSet<'a> {
     name: &'a str,
     parsed: bool,
     args: Vec<String>,
+    actual: Vec<Rc<RefCell<Flag<'a>>>>,
     formal: BTreeMap<&'a str, Rc<RefCell<Flag<'a>>>>,
     shorthand: BTreeMap<char, Rc<RefCell<Flag<'a>>>>,
+}
+
+macro_rules! builtin_flag_val {
+    ($name:ident, $typ:ty) => {
+        builtin_flag_val!{@gen $name, $typ, concat!(
+            stringify!($name),
+            " defines a ",
+            stringify!($typ),
+            " flag with specified name, default value, and usage string."
+        )}
+    };
+
+    (@gen $name:ident, $typ:ty, $doc:expr) => {
+        #[doc = $doc]
+        pub fn $name(&mut self, name: &'a str, value: $typ, usage: &'a str) {
+            self.add_flag(Flag {
+                name,
+                shorthand: "",
+                usage,
+                value: Box::new(value),
+                def_value: "",
+                changed: false,
+                no_opt_def_value: "",
+                deprecated: "",
+                hidden: false,
+                shorthand_deprecated: "",
+            });
+        }
+    };
 }
 
 impl<'a> FlagSet<'a> {
@@ -25,6 +95,7 @@ impl<'a> FlagSet<'a> {
             name,
             parsed: false,
             args: Vec::new(),
+            actual: Vec::new(),
             formal: BTreeMap::new(),
             shorthand: BTreeMap::new(),
         }
@@ -69,6 +140,36 @@ impl<'a> FlagSet<'a> {
         self.args.clone()
     }
 
+    /// set sets the value of the named flag.
+    pub fn set(&mut self, name: &str, value: &str) -> Result<(), String> {
+        let opt = self.formal.get(name);
+        if let None = opt {
+            return Err(format!("no such flag -{}", name));
+        }
+
+        let flag_rc = opt.unwrap();
+        let mut flag = flag_rc.borrow_mut();
+
+        let res = flag.value.set(value.to_string());
+        if let Err(err) = res {
+            let mut flag_name = format!("--{}", flag.name);
+            if flag.shorthand != "" && flag.shorthand_deprecated != "" {
+                flag_name = format!("-{}, --{}", flag.shorthand, flag.shorthand_deprecated);
+            }
+            return Err(format!(
+                "invalid argument {} for {} flag: {}",
+                value, flag_name, err
+            ));
+        }
+
+        if !flag.changed {
+            self.actual.push(flag_rc.clone());
+            flag.changed = true;
+        }
+
+        Ok(())
+    }
+
     /// parse parses flag definitions from the argument list,
     /// which should not include the command name. Must be called
     /// after all flags in the FlagSet are defined and before flags
@@ -99,7 +200,7 @@ impl<'a> FlagSet<'a> {
         }
     }
 
-    fn parse_long_arg(&self, arg: String, args: &mut Vec<String>) -> Result<(), String> {
+    fn parse_long_arg(&mut self, arg: String, args: &mut Vec<String>) -> Result<(), String> {
         let name = &arg[2..];
         if name.len() == 0 || name.starts_with('-') || name.starts_with('=') {
             return Err(format!("bad flag syntax: {}", arg));
@@ -116,91 +217,40 @@ impl<'a> FlagSet<'a> {
                 Err(format!("unknown flag: --{}", name))
             }
             Some(flag) => {
+                let no_opt_def_value = flag.borrow().no_opt_def_value;
+
                 if split.len() == 2 {
                     let val = split[1];
-                    return flag.borrow_mut().set(val.to_string());
+                    return self.set(name, val);
+                } else if no_opt_def_value != "" {
+                    return self.set(name, no_opt_def_value);
                 } else if args.len() > 0 {
                     let s = args.remove(0);
-                    return flag.borrow_mut().set(s);
+                    return self.set(name, s.as_str());
                 }
                 Err(format!("flag needs an argument: {}", arg))
             }
         }
     }
-}
 
-/// A Flag represents the state of a flag.
-pub struct Flag<'a> {
-    /// name as it appears on command line
-    pub name: &'a str,
-
-    /// one-letter abbreviated flag
-    pub shorthand: &'a str,
-
-    /// help message
-    pub usage: &'a str,
-
-    /// value as set
-    pub value: Box<dyn value::Value>,
-
-    /// default value (as text); for usage message
-    pub def_value: &'a str,
-
-    /// If the user set the value (or if left to default)
-    pub changed: bool,
-
-    /// default value (as text); if the flag is on the command line without any options
-    pub no_opt_def_value: &'a str,
-
-    /// If this flag is deprecated, this string is the new or now thing to use
-    pub deprecated: &'a str,
-
-    /// used by cobra.Command to allow flags to be hidden from help/usage text
-    pub hidden: bool,
-
-    /// If the shorthand of this flag is deprecated, this string is the new or now thing to use
-    pub shorthand_deprecated: &'a str,
-}
-
-impl<'a> Flag<'a> {
-    pub fn set(&mut self, val: String) -> Result<(), String> {
-        self.value.set(val)
+    #[doc = "bool defines a bool flag with specified name, default value, and usage string."]
+    pub fn bool(&mut self, name: &'a str, value: bool, usage: &'a str) {
+        self.add_flag(Flag {
+            name,
+            shorthand: "",
+            usage,
+            value: Box::new(value),
+            def_value: "",
+            changed: false,
+            no_opt_def_value: "true",
+            deprecated: "",
+            hidden: false,
+            shorthand_deprecated: "",
+        })
     }
-}
 
-macro_rules! builtin_flag_val {
-    ($name:ident, $typ:ty) => {
-        builtin_flag_val!{@gen $name, $typ, concat!(
-            stringify!($name),
-            " defines a ",
-            stringify!($typ),
-            " flag with specified name, default value, and usage string."
-        )}
-    };
-
-    (@gen $name:ident, $typ:ty, $doc:expr) => {
-        #[doc = $doc]
-        pub fn $name(&mut self, name: &'a str, value: $typ, usage: &'a str) {
-            self.add_flag(Flag {
-                name,
-                shorthand: "",
-                usage,
-                value: Box::new(value),
-                def_value: "",
-                changed: false,
-                no_opt_def_value: "",
-                deprecated: "",
-                hidden: false,
-                shorthand_deprecated: "",
-            });
-        }
-    };
-}
-
-// Methods for adding flags
-impl<'a> FlagSet<'a> {
-    builtin_flag_val!(bool, bool);
     builtin_flag_val!(char, char);
+    builtin_flag_val!(string, String);
     builtin_flag_val!(uint8, u8);
     builtin_flag_val!(uint16, u16);
     builtin_flag_val!(uint32, u32);
@@ -223,30 +273,7 @@ impl<'a> FlagSet<'a> {
     builtin_flag_val!(socket_addr_v4, std::net::SocketAddrV4);
     builtin_flag_val!(socket_addr_v6, std::net::SocketAddrV6);
 
-    pub fn string(&mut self, name: &'a str, value: &'a str, usage: &'a str) {
-        self.add_flag(Flag {
-            name,
-            shorthand: "",
-            usage,
-            value: Box::new(value::String::new(value.to_string())),
-            def_value: "",
-            changed: false,
-            no_opt_def_value: "",
-            deprecated: "",
-            hidden: false,
-            shorthand_deprecated: "",
-        });
-    }
-}
-
-// Methods for retrieving values
-impl<'a> FlagSet<'a> {
-    pub fn get_string(&self, name: &str) -> String {
-        let flag = self.formal.get(name).unwrap();
-        flag.borrow().value.value()
-    }
-
-    pub fn get<T: std::str::FromStr<Err: std::fmt::Debug>>(&self, name: &str) -> T {
+    pub fn get<T: std::str::FromStr<Err: fmt::Debug>>(&self, name: &str) -> T {
         let flag = self.formal.get(name).unwrap();
         flag.borrow().value.value().parse().unwrap()
     }
@@ -259,25 +286,25 @@ mod tests {
     #[test]
     fn parse_long_with_eq() {
         let mut flags = FlagSet::new("test");
-        flags.string("hello", "", "test");
+        flags.string("hello", "".to_string(), "test");
 
         if let Err(err) = flags.parse(vec!["--hello=world".to_string()]) {
             panic!(err);
         }
 
-        assert_eq!(flags.get_string("hello"), "world".to_string());
+        assert_eq!(flags.get::<String>("hello"), "world".to_string());
     }
 
     #[test]
     fn parse_long_arg_with_space() {
         let mut flags = FlagSet::new("test");
-        flags.string("hello", "", "test");
+        flags.string("hello", "".to_string(), "test");
 
         if let Err(err) = flags.parse(vec!["--hello".to_string(), "world".to_string()]) {
             panic!(err);
         }
 
-        assert_eq!(flags.get_string("hello"), "world".to_string());
+        assert_eq!(flags.get::<String>("hello"), "world".to_string());
     }
 
     #[test]
