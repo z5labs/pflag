@@ -6,15 +6,15 @@ use std::string;
 ///
 /// (The default value is represented as a string.)
 pub trait Value {
-    // set
+    /// set sets the underlying value.
     fn set(&mut self, val: string::String) -> Result<(), string::String>;
 
-    // value
+    /// value retrieves the current value as a String.
     fn value(&self) -> string::String;
 
-    // typ returns the type name as a string. By default,
-    // all Values are assumed to be strings.
-    //
+    /// typ returns the type name as a string. By default,
+    /// all Values are assumed to be strings.
+    ///
     fn typ(&self) -> &str {
         "String"
     }
