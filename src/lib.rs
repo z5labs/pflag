@@ -4,46 +4,50 @@
 
 mod value;
 
-use std::cell::{Ref, RefCell};
-use std::collections::BTreeMap;
-use std::fmt;
-use std::rc::Rc;
 pub use value::Value;
 
+use std::collections::BTreeMap;
+use std::fmt;
+use std::iter::Peekable;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+
+use concat_idents::concat_idents;
+use paste::paste;
+
 /// A Flag represents the state of a flag.
-pub struct Flag<'a> {
+pub struct Flag {
     /// name as it appears on command line
-    pub name: &'a str,
+    pub name: String,
 
     /// one-letter abbreviated flag
-    pub shorthand: &'a str,
+    pub shorthand: char,
 
     /// help message
-    pub usage: &'a str,
+    pub usage: String,
 
     /// value as set
     pub value: Box<dyn value::Value>,
 
     /// default value (as text); for usage message
-    pub def_value: &'a str,
+    pub def_value: String,
 
     /// If the user set the value (or if left to default)
     pub changed: bool,
 
     /// default value (as text); if the flag is on the command line without any options
-    pub no_opt_def_value: &'a str,
+    pub no_opt_def_value: String,
 
     /// If this flag is deprecated, this string is the new or now thing to use
-    pub deprecated: &'a str,
+    pub deprecated: String,
 
     /// used by cobra.Command to allow flags to be hidden from help/usage text
     pub hidden: bool,
 
     /// If the shorthand of this flag is deprecated, this string is the new or now thing to use
-    pub shorthand_deprecated: &'a str,
+    pub shorthand_deprecated: String,
 }
 
-impl<'a> Flag<'a> {
+impl Flag {
     pub fn set(&mut self, val: String) -> Result<(), String> {
         self.value.set(val)
     }
@@ -54,84 +58,96 @@ impl<'a> Flag<'a> {
 }
 
 /// A FlagSet represents a set of defined flags.
-pub struct FlagSet<'a> {
-    name: &'a str,
+pub struct FlagSet {
+    name: String,
     parsed: bool,
     args: Vec<String>,
-    actual: Vec<Rc<RefCell<Flag<'a>>>>,
-    formal: BTreeMap<&'a str, Rc<RefCell<Flag<'a>>>>,
-    shorthand: BTreeMap<char, Rc<RefCell<Flag<'a>>>>,
+    flags: Vec<Flag>,
+    formal: BTreeMap<String, usize>,
+    shorthand: BTreeMap<char, usize>,
 }
 
 macro_rules! builtin_flag_val {
     ($name:ident, $typ:ty) => {
-        builtin_flag_val!{@gen $name, $typ, concat!(
-            stringify!($name),
-            " defines a ",
-            stringify!($typ),
-            " flag with specified name, default value, and usage string."
-        )}
-    };
+        paste!{
+        concat_idents!(fn_short = $name, _, p {
+            #[doc = $name " defines a " $typ " flag with specified name, default value, and usage string."]
+            pub fn $name<S: Into<String>, U: Into<String>>(&mut self, name: S, value: $typ, usage: U) {
+                self.add_flag(Flag {
+                    name: name.into(),
+                    shorthand: 0 as char,
+                    usage: usage.into(),
+                    value: Box::new(value),
+                    def_value: String::new(),
+                    changed: false,
+                    no_opt_def_value: String::new(),
+                    deprecated: String::new(),
+                    hidden: false,
+                    shorthand_deprecated: String::new(),
+                });
+            }
 
-    (@gen $name:ident, $typ:ty, $doc:expr) => {
-        #[doc = $doc]
-        pub fn $name(&mut self, name: &'a str, value: $typ, usage: &'a str) {
-            self.add_flag(Flag {
-                name,
-                shorthand: "",
-                usage,
-                value: Box::new(value),
-                def_value: "",
-                changed: false,
-                no_opt_def_value: "",
-                deprecated: "",
-                hidden: false,
-                shorthand_deprecated: "",
-            });
+            #[doc = $name "_p is like " $name ", but accepts a shorthand letter that can be used after a single dash."]
+            pub fn fn_short<S: Into<String>, U: Into<String>>(&mut self, name: S, shorthand: char, value: $typ, usage: U) {
+                self.add_flag(Flag {
+                    name: name.into(),
+                    shorthand,
+                    usage: usage.into(),
+                    value: Box::new(value),
+                    def_value: String::new(),
+                    changed: false,
+                    no_opt_def_value: String::new(),
+                    deprecated: String::new(),
+                    hidden: false,
+                    shorthand_deprecated: String::new(),
+                });
+            }
+        });
         }
     };
 }
 
-impl<'a> FlagSet<'a> {
+fn scan_arg<I: Iterator<Item = char>>(iter: &mut Peekable<I>) -> String {
+    iter.take_while(|c| *c != ' ').collect()
+}
+
+impl FlagSet {
     /// new returns a new, empty flag set with the specified name.
-    pub fn new(name: &'a str) -> Self {
+    pub fn new<S: Into<String>>(name: S) -> Self {
         FlagSet {
-            name,
+            name: name.into(),
             parsed: false,
             args: Vec::new(),
-            actual: Vec::new(),
+            flags: Vec::new(),
             formal: BTreeMap::new(),
             shorthand: BTreeMap::new(),
         }
     }
 
     /// add_flag will add the flag to the FlagSet.
-    pub fn add_flag(&mut self, flag: Flag<'a>) {
-        if let Some(_) = self.formal.get(flag.name) {
+    pub fn add_flag(&mut self, flag: Flag) {
+        if let Some(_) = self.formal.get(&flag.name) {
             panic!("{} flag redefined: {}", self.name, flag.name);
         }
-        let name = flag.name;
-        let shorthand = flag.shorthand;
-        let rf = Rc::new(RefCell::new(flag));
-        self.formal.insert(name, rf.clone());
+        let name = flag.name.clone();
+        let shorthand = flag.shorthand.clone();
 
-        if shorthand == "" {
+        let flags_len = self.flags.len();
+        self.flags.push(flag);
+        self.formal.insert(name, flags_len);
+
+        if shorthand == 0 as char {
             return;
         }
-        if shorthand.len() > 1 {
-            panic!("{} shorthand is more than one ASCII character", shorthand);
-        }
 
-        let c = shorthand.chars().nth(0).unwrap();
+        let c = shorthand;
         if let Some(used) = self.shorthand.get(&c) {
             panic!(
                 "unable to redefine {} shorthand in {} flagset: it's already used for {} flag",
-                c,
-                self.name,
-                used.borrow().name
+                c, self.name, self.flags[*used].name
             );
         }
-        self.shorthand.insert(c, rf);
+        self.shorthand.insert(c, flags_len);
     }
 
     /// parsed reports whether self.parse has been called.
@@ -140,7 +156,7 @@ impl<'a> FlagSet<'a> {
     }
 
     /// args returns the non-flag arguments.
-    pub fn args(&self) -> Vec<String> {
+    pub fn args(self) -> Vec<String> {
         self.args.clone()
     }
 
@@ -148,43 +164,56 @@ impl<'a> FlagSet<'a> {
     /// order if f.SortFlags is false, calling fn for each. It visits only
     /// those flags that have been set.
     pub fn visit<F: FnMut(&Flag)>(&self, mut f: F) {
-        if self.actual.len() == 0 {
+        if self.flags.len() == 0 {
             return;
         }
 
-        self.actual.iter().for_each(|flag| f(&*flag.borrow()));
+        self.flags
+            .iter()
+            .filter(|f| f.changed)
+            .for_each(|flag| f(flag));
     }
 
     /// visit_all visits the flags in lexicographical order or in primordial
     /// order if f.SortFlags is false, calling fn for each. It visits all
     /// flags, even those not set.
     pub fn visit_all<F: FnMut(&Flag)>(&self, mut f: F) {
-        if self.formal.len() == 0 {
+        if self.flags.len() == 0 {
             return;
         }
 
-        self.formal.values().for_each(|flag| f(&*flag.borrow()));
+        self.flags.iter().for_each(|flag| f(flag));
     }
 
     /// lookup returns the flag structure of the named flag, returning None if none exists.
-    pub fn lookup(&self, name: &str) -> Option<Ref<'_, Flag>> {
-        self.formal.get(name).map(|f| f.borrow())
+    pub fn lookup<S: Into<String>>(&self, name: S) -> Option<&Flag> {
+        let i = self.formal.get(&name.into());
+        if i.is_none() {
+            return None;
+        }
+        let i = i.unwrap();
+        self.flags.get(*i)
     }
 
     /// set sets the value of the named flag.
-    pub fn set(&mut self, name: &str, value: &str) -> Result<(), String> {
-        let opt = self.formal.get(name);
-        if let None = opt {
+    pub fn set<S: Into<String>, T: Into<String>>(
+        &mut self,
+        name: S,
+        value: T,
+    ) -> Result<(), String> {
+        let name = name.into();
+        let opt = self.formal.get(&name);
+        if opt.is_none() {
             return Err(format!("no such flag -{}", name));
         }
+        let value = value.into();
 
-        let flag_rc = opt.unwrap();
-        let mut flag = flag_rc.borrow_mut();
+        let mut flag = self.flags.get_mut(*opt.unwrap()).unwrap();
 
-        let res = flag.value.set(value.to_string());
+        let res = flag.value.set(value.clone());
         if let Err(err) = res {
             let mut flag_name = format!("--{}", flag.name);
-            if flag.shorthand != "" && flag.shorthand_deprecated != "" {
+            if flag.shorthand != 0 as char && flag.shorthand_deprecated != "" {
                 flag_name = format!("-{}, --{}", flag.shorthand, flag.shorthand_deprecated);
             }
             return Err(format!(
@@ -194,7 +223,6 @@ impl<'a> FlagSet<'a> {
         }
 
         if !flag.changed {
-            self.actual.push(flag_rc.clone());
             flag.changed = true;
         }
 
@@ -206,77 +234,197 @@ impl<'a> FlagSet<'a> {
     /// after all flags in the FlagSet are defined and before flags
     /// are accessed by the program. The return value will be ErrHelp
     /// if -help was set but not defined.
-    pub fn parse(&mut self, args: impl IntoIterator<Item = String>) -> Result<(), String> {
+    pub fn parse<'a>(&mut self, args: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
         self.parsed = true;
 
-        let mut av: Vec<String> = args.into_iter().collect();
+        let mut av = args
+            .into_iter()
+            .flat_map(|arg| arg.chars().chain(" ".chars()))
+            .peekable();
+
         loop {
-            if av.len() == 0 {
+            let arg = av.peek();
+            if arg.is_none() {
+                av.next();
                 return Ok(());
             }
-            let s = av.remove(0);
+            let s = arg.unwrap();
 
-            if s.len() == 0 || !s.starts_with('-') || s.len() == 1 {
-                self.args.push(s);
-                continue;
-            }
+            match s {
+                '-' => {
+                    av.next();
+                    let arg = av.peek();
+                    if arg.is_none() {
+                        av.next();
+                        self.args.push("-".to_string());
+                        return Ok(());
+                    }
+                    let s = arg.unwrap();
+                    if *s != '-' {
+                        self.parse_shorthand(&mut av)?;
+                        continue;
+                    }
+                    av.next();
 
-            if s.starts_with("--") {
-                if let Err(err) = self.parse_long_arg(s, &mut av) {
-                    return Err(err);
+                    let arg = av.peek();
+                    let s = arg.unwrap();
+                    if *s == ' ' {
+                        // "--" terminates flags
+                        av.next();
+                        let mut i = 0;
+                        let args: Vec<String> = av.fold(Vec::new(), |mut acc, c| {
+                            if c == ' ' {
+                                i += 1;
+                                return acc;
+                            }
+
+                            if acc.len() == i {
+                                acc.push(String::new());
+                            }
+                            acc[i].push(c);
+                            acc
+                        });
+
+                        self.args.extend(args);
+                        return Ok(());
+                    }
+                    self.parse_long(&mut av)?;
                 }
-            } else {
-                // TODO: Parse short arg
+                _ => {
+                    let val = scan_arg(&mut av);
+                    self.args.push(val);
+                }
             }
         }
     }
 
-    fn parse_long_arg(&mut self, arg: String, args: &mut Vec<String>) -> Result<(), String> {
-        let name = &arg[2..];
-        if name.len() == 0 || name.starts_with('-') || name.starts_with('=') {
-            return Err(format!("bad flag syntax: {}", arg));
+    fn parse_long<I: Iterator<Item = char>>(
+        &mut self,
+        args: &mut Peekable<I>,
+    ) -> Result<(), String> {
+        let arg = args.peek();
+        if arg.is_none() {
+            return Err(String::from("bad flag syntax: --"));
         }
-        let split: Vec<&str> = name.splitn(2, '=').collect();
+        let c = arg.unwrap();
+        if *c == '-' || *c == '=' {
+            return Err(format!("bad flag syntax: --{}", scan_arg(args)));
+        }
+        let s = scan_arg(args);
+        let split: Vec<&str> = s.splitn(2, '=').collect();
         let name = split[0];
 
-        match self.formal.get(name) {
-            None => {
-                if name == "help" {
-                    return Err("help".to_string());
-                }
+        let i = self.formal.get(name);
+        if i.is_none() {
+            // TODO: ParseErrorsWhitelist.UnknownFlags
+            return Err(format!("unknown flag: --{}", name));
+        }
+        let i = i.unwrap();
+        let flag = self.flags.get(*i).unwrap();
+        let no_opt_def_value = flag.no_opt_def_value.clone();
 
-                Err(format!("unknown flag: --{}", name))
+        if split.len() == 2 {
+            let val = split[1];
+            return self.set(name, val);
+        } else if no_opt_def_value != "" {
+            return self.set(name, no_opt_def_value);
+        }
+
+        let arg = args.peek();
+        if arg.is_none() {
+            return Err(format!("flag needs an argument: --{}", name));
+        }
+        let val = scan_arg(args);
+        self.set(name, val)
+    }
+
+    fn parse_shorthand<I: Iterator<Item = char>>(
+        &mut self,
+        args: &mut Peekable<I>,
+    ) -> Result<(), String> {
+        loop {
+            let arg = args.next();
+            if arg.is_none() {
+                return Ok(());
             }
-            Some(flag) => {
-                let no_opt_def_value = flag.borrow().no_opt_def_value;
+            let c = arg.unwrap();
+            if c == ' ' {
+                return Ok(());
+            }
 
-                if split.len() == 2 {
-                    let val = split[1];
-                    return self.set(name, val);
-                } else if no_opt_def_value != "" {
-                    return self.set(name, no_opt_def_value);
-                } else if args.len() > 0 {
-                    let s = args.remove(0);
-                    return self.set(name, s.as_str());
-                }
-                Err(format!("flag needs an argument: {}", arg))
+            let i = self.shorthand.get(&c);
+            if i.is_none() {
+                // TODO: ParseErrorsWhitelist.UnknownFlags
+                return Err(format!(
+                    "unknown shorthand flag: {} in -{}{}",
+                    c,
+                    c,
+                    scan_arg(args)
+                ));
+            }
+            let i = i.unwrap();
+            let flag = self.flags.get(*i).unwrap();
+            let name = flag.name.clone();
+            let no_opt_def_value = flag.no_opt_def_value.clone();
+
+            let arg = args.peek();
+            if arg.is_none() {
+                return Err(format!(
+                    "flag needs an argument: {} in -{}{}",
+                    c,
+                    c,
+                    scan_arg(args)
+                ));
+            }
+
+            let c = arg.unwrap();
+            if *c == '=' {
+                args.next();
+                self.set(name, scan_arg(args))?;
+            } else if no_opt_def_value != "" {
+                self.set(name, no_opt_def_value)?;
+            } else if *c != ' ' {
+                self.set(name, scan_arg(args))?;
+            } else {
+                args.next();
+                self.set(name, scan_arg(args))?;
             }
         }
     }
 
     #[doc = "bool defines a bool flag with specified name, default value, and usage string."]
-    pub fn bool(&mut self, name: &'a str, value: bool, usage: &'a str) {
+    pub fn bool<S: Into<String>, U: Into<String>>(&mut self, name: S, value: bool, usage: U) {
         self.add_flag(Flag {
-            name,
-            shorthand: "",
-            usage,
+            name: name.into(),
+            shorthand: 0 as char,
+            usage: usage.into(),
             value: Box::new(value),
-            def_value: "",
+            def_value: String::new(),
             changed: false,
-            no_opt_def_value: "true",
-            deprecated: "",
+            no_opt_def_value: String::from("true"),
+            deprecated: String::new(),
             hidden: false,
-            shorthand_deprecated: "",
+            shorthand_deprecated: String::new(),
+        })
+    }
+
+    #[doc = "bool_p is like bool, but accepts a shorthand letter that can be used after a single dash."]
+    pub fn bool_p<S, U>(&mut self, name: S, shorthand: char, value: bool, usage: U)
+    where
+        S: Into<String>,
+        U: Into<String>,
+    {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand,
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::from("true"),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
         })
     }
 
@@ -296,24 +444,23 @@ impl<'a> FlagSet<'a> {
     builtin_flag_val!(isize, isize);
     builtin_flag_val!(f32, f32);
     builtin_flag_val!(f64, f64);
-
-    builtin_flag_val!(ip_addr, std::net::IpAddr);
-    builtin_flag_val!(ip_v4_addr, std::net::Ipv4Addr);
-    builtin_flag_val!(ip_v6_addr, std::net::Ipv6Addr);
-    builtin_flag_val!(socket_addr, std::net::SocketAddr);
-    builtin_flag_val!(socket_addr_v4, std::net::SocketAddrV4);
-    builtin_flag_val!(socket_addr_v6, std::net::SocketAddrV6);
+    builtin_flag_val!(ip_addr, IpAddr);
+    builtin_flag_val!(ip_v4_addr, Ipv4Addr);
+    builtin_flag_val!(ip_v6_addr, Ipv6Addr);
+    builtin_flag_val!(socket_addr, SocketAddr);
+    builtin_flag_val!(socket_addr_v4, SocketAddrV4);
+    builtin_flag_val!(socket_addr_v6, SocketAddrV6);
 
     /// value_of retrieves the value for the given flags name.
     pub fn value_of<T: std::str::FromStr<Err: fmt::Debug>>(&self, name: &str) -> T {
-        let flag = self.formal.get(name).unwrap();
-        flag.borrow().value.value().parse().unwrap()
+        let i = self.formal.get(name).unwrap();
+        self.flags[*i].value.value().parse().unwrap()
     }
 }
 
 /// FlagSet implements fmt::Display to format the
 /// usage for all the flags in the set.
-impl<'a> fmt::Display for FlagSet<'a> {
+impl fmt::Display for FlagSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut buf = String::new();
         let mut lines: Vec<String> = Vec::new();
@@ -325,7 +472,7 @@ impl<'a> fmt::Display for FlagSet<'a> {
             }
 
             let mut line = format!("      --{}", flag.name);
-            if flag.shorthand != "" && flag.shorthand_deprecated == "" {
+            if flag.shorthand != 0 as char && flag.shorthand_deprecated == "" {
                 line = format!("  -{}, --{}", flag.shorthand, flag.name);
             }
 
@@ -379,8 +526,8 @@ impl<'a> fmt::Display for FlagSet<'a> {
     }
 }
 
-fn unquote_usage(flag: &Flag<'_>) -> (String, String) {
-    let usage = flag.usage;
+fn unquote_usage(flag: &Flag) -> (String, String) {
+    let usage = flag.usage.clone();
     for i in 1..usage.len() + 1 {
         if &usage[i - 1..i] == "`" {
             for j in i + 1..usage.len() + 1 {
@@ -418,7 +565,7 @@ mod tests {
         let mut flags = FlagSet::new("test");
         flags.string("hello", "".to_string(), "test");
 
-        if let Err(err) = flags.parse(vec!["--hello=world".to_string()]) {
+        if let Err(err) = flags.parse(vec!["--hello=world"]) {
             panic!(err);
         }
 
@@ -430,7 +577,7 @@ mod tests {
         let mut flags = FlagSet::new("test");
         flags.string("hello", "".to_string(), "test");
 
-        if let Err(err) = flags.parse(vec!["--hello".to_string(), "world".to_string()]) {
+        if let Err(err) = flags.parse(vec!["--hello", "world"]) {
             panic!(err);
         }
 
@@ -442,7 +589,7 @@ mod tests {
         let mut flags = FlagSet::new("test");
         flags.bool("hello", false, "test");
 
-        if let Err(err) = flags.parse(vec!["--hello".to_string()]) {
+        if let Err(err) = flags.parse(vec!["--hello"]) {
             panic!(err);
         }
 
@@ -462,13 +609,94 @@ mod tests {
     }
 
     #[test]
-    fn parse_ignore_positional_args() {
+    fn parse_short_with_eq() {
         let mut flags = FlagSet::new("test");
+        flags.bool_p("help", 'h', false, "test");
 
-        if let Err(err) = flags.parse(vec!["hello".to_string(), "world".to_string()]) {
+        if let Err(err) = flags.parse(vec!["-h=true"]) {
             panic!(err);
         }
 
-        assert_eq!(flags.args().len(), 2);
+        assert_eq!(flags.value_of::<bool>("help"), true);
+    }
+
+    #[test]
+    fn parse_short_wo_val() {
+        let mut flags = FlagSet::new("test");
+        flags.bool_p("help", 'h', false, "test");
+
+        if let Err(err) = flags.parse(vec!["-h"]) {
+            panic!(err);
+        }
+
+        assert_eq!(flags.value_of::<bool>("help"), true);
+    }
+
+    #[test]
+    fn parse_short_multiple() {
+        let mut flags = FlagSet::new("test");
+        flags.bool_p("help", 'h', false, "test");
+        flags.bool_p("verbose", 'v', false, "test");
+
+        if let Err(err) = flags.parse(vec!["-vh"]) {
+            panic!(err);
+        }
+
+        assert_eq!(flags.value_of::<bool>("help"), true);
+        assert_eq!(flags.value_of::<bool>("verbose"), true);
+    }
+
+    #[test]
+    fn parse_short_multiple_with_eq() {
+        let mut flags = FlagSet::new("test");
+        flags.bool_p("help", 'h', false, "test");
+        flags.bool_p("verbose", 'v', false, "test");
+
+        if let Err(err) = flags.parse(vec!["-vh=false"]) {
+            panic!(err);
+        }
+
+        assert_eq!(flags.value_of::<bool>("help"), false);
+        assert_eq!(flags.value_of::<bool>("verbose"), true);
+    }
+
+    #[test]
+    fn parse_short_wo_eq() {
+        let mut flags = FlagSet::new("test");
+        flags.uint32_p("port", 'p', 0, "test");
+
+        if let Err(err) = flags.parse(vec!["-p8080"]) {
+            panic!(err);
+        }
+
+        assert_eq!(flags.value_of::<u32>("port"), 8080);
+    }
+
+    #[test]
+    fn parse_ignore_positional_args() {
+        let mut flags = FlagSet::new("test");
+
+        if let Err(err) = flags.parse(vec!["hello", "world"]) {
+            panic!(err);
+        }
+
+        let args = flags.args();
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "hello");
+        assert_eq!(args[1], "world");
+    }
+
+    #[test]
+    fn parse_terminate_flags() {
+        let mut flags = FlagSet::new("test");
+
+        if let Err(err) = flags.parse(vec!["--", "hello", "world"]) {
+            panic!(err);
+        }
+
+        let args = flags.args();
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "hello");
+        assert_eq!(args[1], "world");
     }
 }
