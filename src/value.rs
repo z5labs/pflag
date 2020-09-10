@@ -1,11 +1,23 @@
+use std::error::Error;
 use std::fmt;
 use std::str;
 use std::string;
 
+#[derive(Debug)]
+pub struct ValueError(Box<dyn Error>);
+
+impl fmt::Display for ValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unexpected error while setting value: {}", &self.0)
+    }
+}
+
+impl Error for ValueError {}
+
 /// Value is a trait representing the value stored in a flag.
 pub trait Value {
     /// set sets the underlying value.
-    fn set(&mut self, val: string::String) -> Result<(), string::String>;
+    fn set(&mut self, val: string::String) -> Result<(), ValueError>;
 
     /// value retrieves the current value as a String.
     fn value(&self) -> string::String;
@@ -21,7 +33,11 @@ pub trait Value {
     }
 }
 
-impl<T: string::ToString + str::FromStr<Err: fmt::Debug>> Value for T {
+impl<E, T> Value for T
+where
+    E: Error + 'static,
+    T: string::ToString + str::FromStr<Err = E>,
+{
     // typ is reimplemeted in order to leverage any::type_name, which
     // is currently whereas any::type_name_of_val is not.
     fn typ(&self) -> &str {
@@ -33,14 +49,14 @@ impl<T: string::ToString + str::FromStr<Err: fmt::Debug>> Value for T {
             + 1) as usize..]
     }
 
-    fn set(&mut self, val: string::String) -> Result<(), string::String> {
+    fn set(&mut self, val: string::String) -> Result<(), ValueError> {
         let res = val.as_str().parse::<T>();
         match res {
             Ok(v) => {
                 *self = v;
                 Ok(())
             }
-            Err(err) => Err(format!("unexpected error while parsing: {:?}", err)),
+            Err(err) => Err(ValueError(Box::new(err))),
         }
     }
 
@@ -94,7 +110,11 @@ impl<T, V: Into<Vec<T>>> From<V> for Slice<T> {
     }
 }
 
-impl<T: string::ToString + str::FromStr<Err: fmt::Debug>> Value for Slice<T> {
+impl<E, T> Value for Slice<T>
+where
+    E: Error + 'static,
+    T: string::ToString + str::FromStr<Err = E>,
+{
     fn typ(&self) -> &str {
         let type_name = std::any::type_name::<T>();
         &type_name[(type_name
@@ -104,7 +124,7 @@ impl<T: string::ToString + str::FromStr<Err: fmt::Debug>> Value for Slice<T> {
             + 1) as usize..]
     }
 
-    fn set(&mut self, val: string::String) -> Result<(), string::String> {
+    fn set(&mut self, val: string::String) -> Result<(), ValueError> {
         if !self.changed {
             self.vals = Vec::with_capacity(self.vals.capacity());
         }
@@ -115,7 +135,7 @@ impl<T: string::ToString + str::FromStr<Err: fmt::Debug>> Value for Slice<T> {
                     self.vals.push(v);
                     Ok(())
                 }
-                Err(err) => Err(format!("unexpected error while parsing: {:?}", err)),
+                Err(err) => Err(ValueError(Box::new(err))),
             }
         })
     }
@@ -135,7 +155,11 @@ impl<T: string::ToString + str::FromStr<Err: fmt::Debug>> Value for Slice<T> {
     }
 }
 
-impl<T: str::FromStr<Err: fmt::Debug>> str::FromStr for Slice<T> {
+impl<E, T> str::FromStr for Slice<T>
+where
+    E: Error + 'static,
+    T: str::FromStr<Err = E>,
+{
     type Err = T::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

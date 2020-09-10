@@ -1,12 +1,12 @@
 //! pflag is a port of spf13s' amazing Go package by the same name.
 
-#![feature(associated_type_bounds)]
 #![feature(type_name_of_val)]
 
 mod value;
 
 pub use value::Slice;
 pub use value::Value;
+pub use value::ValueError;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -51,7 +51,7 @@ pub struct Flag {
 }
 
 impl Flag {
-    pub fn set(&mut self, val: String) -> Result<(), String> {
+    pub fn set(&mut self, val: String) -> Result<(), ValueError> {
         self.value.set(val)
     }
 
@@ -534,9 +534,9 @@ impl FlagSet {
     builtin_flag_val!(socket_addr_v6, SocketAddrV6);
 
     /// value_of retrieves the value for the given flags name.
-    pub fn value_of<T: std::str::FromStr<Err: fmt::Debug>>(&self, name: &str) -> T {
+    pub fn value_of<T: std::str::FromStr>(&self, name: &str) -> Result<T, T::Err> {
         let i = self.formal.get(name).unwrap();
-        self.flags[*i].value.value().parse().unwrap()
+        self.flags[*i].value.value().parse()
     }
 }
 
@@ -651,7 +651,10 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<String>("hello"), "world".to_string());
+        assert_eq!(
+            flags.value_of::<String>("hello").unwrap(),
+            "world".to_string()
+        );
     }
 
     #[test]
@@ -663,7 +666,10 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<String>("hello"), "world".to_string());
+        assert_eq!(
+            flags.value_of::<String>("hello").unwrap(),
+            "world".to_string()
+        );
     }
 
     #[test]
@@ -675,7 +681,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("hello"), true);
+        assert_eq!(flags.value_of::<bool>("hello").unwrap(), true);
     }
 
     #[test]
@@ -687,7 +693,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("hello"), true);
+        assert_eq!(flags.value_of::<bool>("hello").unwrap(), true);
     }
 
     #[test]
@@ -699,7 +705,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help"), true);
+        assert_eq!(flags.value_of::<bool>("help").unwrap(), true);
     }
 
     #[test]
@@ -711,7 +717,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help"), true);
+        assert_eq!(flags.value_of::<bool>("help").unwrap(), true);
     }
 
     #[test]
@@ -724,8 +730,8 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help"), true);
-        assert_eq!(flags.value_of::<bool>("verbose"), true);
+        assert_eq!(flags.value_of::<bool>("help").unwrap(), true);
+        assert_eq!(flags.value_of::<bool>("verbose").unwrap(), true);
     }
 
     #[test]
@@ -738,8 +744,8 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help"), false);
-        assert_eq!(flags.value_of::<bool>("verbose"), true);
+        assert_eq!(flags.value_of::<bool>("help").unwrap(), false);
+        assert_eq!(flags.value_of::<bool>("verbose").unwrap(), true);
     }
 
     #[test]
@@ -751,7 +757,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<u32>("port"), 8080);
+        assert_eq!(flags.value_of::<u32>("port").unwrap(), 8080);
     }
 
     #[test]
@@ -791,7 +797,7 @@ mod tests {
             panic!(err);
         }
 
-        let bools = flags.value_of::<Slice<bool>>("bools");
+        let bools = flags.value_of::<Slice<bool>>("bools").unwrap();
         assert_eq!(bools.len(), 3);
     }
 
@@ -804,7 +810,7 @@ mod tests {
             panic!(err);
         }
 
-        let bools = flags.value_of::<Slice<bool>>("bools");
+        let bools = flags.value_of::<Slice<bool>>("bools").unwrap();
         assert_eq!(bools.len(), 3);
     }
 
@@ -817,7 +823,7 @@ mod tests {
             panic!(err);
         }
 
-        let bools = flags.value_of::<value::Slice<bool>>("bools");
+        let bools = flags.value_of::<value::Slice<bool>>("bools").unwrap();
         assert_eq!(bools.len(), 3);
     }
 
@@ -830,7 +836,7 @@ mod tests {
             panic!(err);
         }
 
-        let bools = flags.value_of::<Slice<bool>>("bools");
+        let bools = flags.value_of::<Slice<bool>>("bools").unwrap();
         assert_eq!(bools.len(), 1);
     }
 }
