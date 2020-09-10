@@ -1,15 +1,18 @@
 //! pflag is a port of spf13s' amazing Go package by the same name.
 
 #![feature(associated_type_bounds)]
+#![feature(type_name_of_val)]
 
 mod value;
 
+pub use value::Slice;
 pub use value::Value;
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::iter::Peekable;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::str;
 
 use concat_idents::concat_idents;
 use paste::paste;
@@ -89,6 +92,42 @@ macro_rules! builtin_flag_val {
 
             #[doc = $name "_p is like " $name ", but accepts a shorthand letter that can be used after a single dash."]
             pub fn fn_short<S: Into<String>, U: Into<String>>(&mut self, name: S, shorthand: char, value: $typ, usage: U) {
+                self.add_flag(Flag {
+                    name: name.into(),
+                    shorthand,
+                    usage: usage.into(),
+                    value: Box::new(value),
+                    def_value: String::new(),
+                    changed: false,
+                    no_opt_def_value: String::new(),
+                    deprecated: String::new(),
+                    hidden: false,
+                    shorthand_deprecated: String::new(),
+                });
+            }
+        });
+
+        concat_idents!(fn_name = $name, _, slice  {
+            #[doc = $name "_slice defines a `Slice<" $typ ">` flag with specified name, default value, and usage string."]
+            pub fn fn_name<S: Into<String>, U: Into<String>>(&mut self, name: S, value: value::Slice<$typ>, usage: U) {
+                self.add_flag(Flag {
+                    name: name.into(),
+                    shorthand: 0 as char,
+                    usage: usage.into(),
+                    value: Box::new(value),
+                    def_value: String::new(),
+                    changed: false,
+                    no_opt_def_value: String::new(),
+                    deprecated: String::new(),
+                    hidden: false,
+                    shorthand_deprecated: String::new(),
+                });
+            }
+        });
+
+        concat_idents!(fn_name = $name, _, p, _, slice  {
+            #[doc = $name "_p_slice is like " $name "_slice, but accepts a shorthand letter that can be used after a single dash."]
+            pub fn fn_name<S: Into<String>, U: Into<String>>(&mut self, name: S, shorthand: char, value: value::Slice<$typ>, usage: U) {
                 self.add_flag(Flag {
                     name: name.into(),
                     shorthand,
@@ -428,6 +467,49 @@ impl FlagSet {
         })
     }
 
+    #[doc = "bool_slice defines a `Slice<bool>` flag with specified name, default value, and usage string."]
+    pub fn bool_slice<S: Into<String>, U: Into<String>>(
+        &mut self,
+        name: S,
+        value: value::Slice<bool>,
+        usage: U,
+    ) {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand: 0 as char,
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
+    #[doc = "bool_p_slice is like bool_slice, but accepts a shorthand letter that can used after a single dash."]
+    pub fn bool_p_slice<S: Into<String>, U: Into<String>>(
+        &mut self,
+        name: S,
+        shorthand: char,
+        value: value::Slice<bool>,
+        usage: U,
+    ) {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand,
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
     builtin_flag_val!(char, char);
     builtin_flag_val!(string, String);
     builtin_flag_val!(uint8, u8);
@@ -698,5 +780,57 @@ mod tests {
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], "hello");
         assert_eq!(args[1], "world");
+    }
+
+    #[test]
+    fn parse_multi_val_flag_with_comma() {
+        let mut flags = FlagSet::new("test");
+        flags.bool_slice("bools", Slice::new(), "test");
+
+        if let Err(err) = flags.parse(vec!["--bools=true,false,true"]) {
+            panic!(err);
+        }
+
+        let bools = flags.value_of::<Slice<bool>>("bools");
+        assert_eq!(bools.len(), 3);
+    }
+
+    #[test]
+    fn parse_multi_val_flag_with_comma_and_quotes() {
+        let mut flags = FlagSet::new("test");
+        flags.bool_slice("bools", Slice::new(), "test");
+
+        if let Err(err) = flags.parse(vec!["--bools=\"true,false,true\""]) {
+            panic!(err);
+        }
+
+        let bools = flags.value_of::<Slice<bool>>("bools");
+        assert_eq!(bools.len(), 3);
+    }
+
+    #[test]
+    fn parse_multi_val_flag_use() {
+        let mut flags = FlagSet::new("test");
+        flags.bool_slice("bools", Slice::new(), "test");
+
+        if let Err(err) = flags.parse(vec!["--bools=true", "--bools=false", "--bools=true"]) {
+            panic!(err);
+        }
+
+        let bools = flags.value_of::<value::Slice<bool>>("bools");
+        assert_eq!(bools.len(), 3);
+    }
+
+    #[test]
+    fn parse_multi_val_flag_override_defaults() {
+        let mut flags = FlagSet::new("test");
+        flags.bool_slice("bools", Slice::from([true, false, true]), "test");
+
+        if let Err(err) = flags.parse(vec!["--bools=true"]) {
+            panic!(err);
+        }
+
+        let bools = flags.value_of::<Slice<bool>>("bools");
+        assert_eq!(bools.len(), 1);
     }
 }
