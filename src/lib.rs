@@ -195,7 +195,7 @@ impl FlagSet {
     }
 
     /// args returns the non-flag arguments.
-    pub fn args(self) -> Vec<String> {
+    pub fn args(&self) -> Vec<String> {
         self.args.clone()
     }
 
@@ -419,14 +419,14 @@ impl FlagSet {
             let c = arg.unwrap();
             if *c == '=' {
                 args.next();
-                self.set(name, scan_arg(args))?;
+                return self.set(name, scan_arg(args));
             } else if no_opt_def_value != "" {
                 self.set(name, no_opt_def_value)?;
             } else if *c != ' ' {
-                self.set(name, scan_arg(args))?;
+                return self.set(name, scan_arg(args));
             } else {
                 args.next();
-                self.set(name, scan_arg(args))?;
+                return self.set(name, scan_arg(args));
             }
         }
     }
@@ -838,5 +838,33 @@ mod tests {
 
         let bools = flags.value_of::<Slice<bool>>("bools").unwrap();
         assert_eq!(bools.len(), 1);
+    }
+
+    #[test]
+    fn parse_arg_after_shorthand() {
+        let mut flags = FlagSet::new("test");
+        flags.int8_p("int", 'i', 0, "test");
+
+        if let Err(err) = flags.parse(vec!["-i=1", "test"]) {
+            panic!(err);
+        }
+
+        let int = flags.value_of::<i8>("int").unwrap();
+        assert_eq!(int, 1);
+        assert_eq!(flags.args().len(), 1);
+    }
+
+    #[test]
+    fn parse_arg_after_shorthand_with_space() {
+        let mut flags = FlagSet::new("test");
+        flags.int8_p("int", 'i', 0, "test");
+
+        if let Err(err) = flags.parse(vec!["-i", "1", "test"]) {
+            panic!(err);
+        }
+
+        let int = flags.value_of::<i8>("int").unwrap();
+        assert_eq!(int, 1);
+        assert_eq!(flags.args().len(), 1);
     }
 }
