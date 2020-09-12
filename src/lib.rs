@@ -1,6 +1,9 @@
 //! pflag is a port of spf13s' amazing Go package by the same name.
 
 #![feature(type_name_of_val)]
+#![feature(test)]
+
+extern crate test;
 
 mod value;
 
@@ -146,8 +149,10 @@ macro_rules! builtin_flag_val {
     };
 }
 
-fn scan_arg<I: Iterator<Item = char>>(iter: &mut Peekable<I>) -> String {
-    iter.take_while(|c| *c != ' ').collect()
+fn scan_arg<I: Iterator<Item = char>>(iter: &mut I) -> String {
+    iter.skip_while(|c| *c == ' ')
+        .take_while(|c| *c != ' ')
+        .collect()
 }
 
 impl FlagSet {
@@ -641,6 +646,7 @@ fn unquote_usage(flag: &Flag) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test::Bencher;
 
     #[test]
     fn parse_long_with_eq() {
@@ -866,5 +872,34 @@ mod tests {
         let int = flags.value_of::<i8>("int").unwrap();
         assert_eq!(int, 1);
         assert_eq!(flags.args().len(), 1);
+    }
+
+    #[bench]
+    fn bench_parse(b: &mut Bencher) {
+        let mut flags = FlagSet::new("bench");
+        flags.int8("num", 0, "test");
+        flags.string_p("str", 's', "".to_string(), "test");
+        flags.bool_slice("bool", Slice::new(), "test");
+        flags.f64_p_slice("floats", 'f', Slice::new(), "test");
+
+        // --num=2 -shello --bool true --bool false -f=1.0 -f 2.0,3.0,4.0 --floats=3.14
+        let args = [
+            "--num=2",
+            "-shello",
+            "--bool",
+            "true",
+            "--bool",
+            "false",
+            "-f=1.0",
+            "-f",
+            "2.0,3.0,4.0",
+            "--floats=3.14",
+        ];
+
+        b.iter(|| {
+            if let Err(err) = flags.parse(args.iter().map(|s| *s)) {
+                panic!(err);
+            }
+        });
     }
 }
