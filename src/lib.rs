@@ -552,6 +552,62 @@ impl FlagSet {
     builtin_flag_val!(socket_addr_v4, SocketAddrV4);
     builtin_flag_val!(socket_addr_v6, SocketAddrV6);
 
+    /// A helper method for creating flags with a custom `Value` implementation.
+    ///
+    /// ```
+    /// #[derive(Debug)]
+    /// pub struct Complex(f64, f64);
+    ///
+    /// impl pflag::Value for Complex {
+    ///     fn set(&mut self, _: std::string::String) -> std::result::Result<(), pflag::ValueError> { todo!() }
+    ///
+    ///     fn value(&self) -> std::string::String { todo!() }
+    /// }
+    ///
+    /// let mut flags = pflag::FlagSet::new("custom");
+    /// flags.var("complex_number", Complex(0.0, 0.0), "a complex number");
+    /// ```
+    pub fn var<N, V, U>(&mut self, name: N, value: V, usage: U)
+    where
+        N: Into<String>,
+        V: Value + 'static,
+        U: Into<String>,
+    {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand: 0 as char,
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
+    /// A helper method for creating flags with a custom `Value` implementation.
+    pub fn var_p<N, V, U>(&mut self, name: N, shorthand: char, value: V, usage: U)
+    where
+        N: Into<String>,
+        V: Value + 'static,
+        U: Into<String>,
+    {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand,
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
     /// value_of retrieves the value for the given flags name.
     pub fn value_of<T: std::str::FromStr>(&self, name: &str) -> Result<T, T::Err> {
         let i = self.formal.get(name).unwrap();
