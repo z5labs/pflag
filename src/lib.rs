@@ -609,6 +609,15 @@ impl FlagSet {
     }
 
     /// value_of retrieves the value for the given flags name.
+    ///
+    /// ```
+    /// let mut flags = pflag::FlagSet::new("example");
+    /// flags.string("hello", "world".to_string(), "example");
+    ///
+    /// let val = flags.value_of::<String>("hello")?;
+    /// assert_eq!(val, "world");
+    /// # Ok::<(), std::convert::Infallible>(())
+    /// ```
     pub fn value_of<T: std::str::FromStr>(&self, name: &str) -> Result<T, T::Err> {
         let i = self.formal.get(name).unwrap();
         self.flags[*i].value.value().parse()
