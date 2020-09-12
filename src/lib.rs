@@ -278,6 +278,17 @@ impl FlagSet {
     /// after all flags in the FlagSet are defined and before flags
     /// are accessed by the program. The return value will be ErrHelp
     /// if -help was set but not defined.
+    ///
+    /// ```
+    /// let mut flags = pflag::FlagSet::new("example");
+    /// flags.string("hello", String::new(), "example flag");
+    ///
+    /// let args = vec!["--hello=world"];
+    /// if let Err(err) = flags.parse(args) {
+    ///     panic!(err);
+    /// }
+    /// assert_eq!(flags.value_of::<String>("hello").unwrap(), "world".to_string())
+    /// ```
     pub fn parse<'a>(&mut self, args: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
         self.parsed = true;
 
