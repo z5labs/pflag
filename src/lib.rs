@@ -979,4 +979,46 @@ mod tests {
             }
         });
     }
+
+    #[bench]
+    fn bench_value_of(b: &mut Bencher) {
+        let mut flags = FlagSet::new("bench");
+        flags.int8("num", 0, "test");
+        flags.string_p("str", 's', "".to_string(), "test");
+        flags.bool_slice("bool", Slice::new(), "test");
+        flags.f64_p_slice("floats", 'f', Slice::new(), "test");
+
+        // --num=2 -shello --bool true --bool false -f=1.0 -f 2.0,3.0,4.0 --floats=3.14
+        let args = [
+            "--num=2",
+            "-shello",
+            "--bool",
+            "true",
+            "--bool",
+            "false",
+            "-f=1.0",
+            "-f",
+            "2.0,3.0,4.0",
+            "--floats=3.14",
+        ];
+
+        if let Err(err) = flags.parse(args.iter().map(|s| *s)) {
+            panic!(err);
+        }
+
+        b.iter(|| {
+            if let None = flags.value_of::<i8>("num") {
+                panic!("expected i8 for --num");
+            }
+            if let None = flags.value_of::<String>("str") {
+                panic!("expected String for --str");
+            }
+            if let None = flags.value_of::<Slice<bool>>("bool") {
+                panic!("expected bool for --bool");
+            }
+            if let None = flags.value_of::<Slice<f64>>("floats") {
+                panic!("expected Slice<f64> for --floats");
+            }
+        });
+    }
 }
