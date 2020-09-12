@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::error::Error;
 use std::fmt;
 use std::str;
@@ -20,7 +21,7 @@ pub trait Value {
     fn set(&mut self, val: string::String) -> Result<(), ValueError>;
 
     /// value retrieves the current value as a String.
-    fn value(&self) -> string::String;
+    fn value(&self) -> &dyn Any;
 
     /// typ returns the type name as a string.
     fn typ(&self) -> &str {
@@ -36,7 +37,7 @@ pub trait Value {
 impl<E, T> Value for T
 where
     E: Error + 'static,
-    T: string::ToString + str::FromStr<Err = E>,
+    T: str::FromStr<Err = E> + 'static,
 {
     // typ is reimplemeted in order to leverage any::type_name, which
     // is currently whereas any::type_name_of_val is not.
@@ -60,8 +61,8 @@ where
         }
     }
 
-    fn value(&self) -> string::String {
-        self.to_string()
+    fn value(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -113,7 +114,7 @@ impl<T, V: Into<Vec<T>>> From<V> for Slice<T> {
 impl<E, T> Value for Slice<T>
 where
     E: Error + 'static,
-    T: string::ToString + str::FromStr<Err = E>,
+    T: string::ToString + str::FromStr<Err = E> + 'static,
 {
     fn typ(&self) -> &str {
         let type_name = std::any::type_name::<T>();
@@ -140,7 +141,16 @@ where
         })
     }
 
-    fn value(&self) -> string::String {
+    fn value(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl<T> fmt::Display for Slice<T>
+where
+    T: string::ToString,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut val = self
             .vals
             .iter()
@@ -151,25 +161,7 @@ where
                 acc
             });
         val.pop();
-        val
-    }
-}
-
-impl<E, T> str::FromStr for Slice<T>
-where
-    E: Error + 'static,
-    T: str::FromStr<Err = E>,
-{
-    type Err = T::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.trim_matches('"')
-            .split(',')
-            .try_fold(Slice::new(), |mut acc, v| {
-                let res = v.parse::<T>()?;
-                acc.vals.push(res);
-                Ok(acc)
-            })
+        write!(f, "{}", val)
     }
 }
 

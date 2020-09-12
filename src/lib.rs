@@ -290,7 +290,6 @@ impl FlagSet {
     /// if let Err(err) = flags.parse(args) {
     ///     panic!(err);
     /// }
-    /// assert_eq!(flags.value_of::<String>("hello").unwrap(), "world".to_string())
     /// ```
     pub fn parse<'a>(&mut self, args: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
         self.parsed = true;
@@ -561,7 +560,7 @@ impl FlagSet {
     /// impl pflag::Value for Complex {
     ///     fn set(&mut self, _: std::string::String) -> std::result::Result<(), pflag::ValueError> { todo!() }
     ///
-    ///     fn value(&self) -> std::string::String { todo!() }
+    ///     fn value(&self) -> &dyn std::any::Any { self }
     /// }
     ///
     /// let mut flags = pflag::FlagSet::new("custom");
@@ -608,19 +607,18 @@ impl FlagSet {
         })
     }
 
-    /// value_of retrieves the value for the given flags name.
+    /// value_of retrieves a reference to the value for the given flag.
     ///
     /// ```
     /// let mut flags = pflag::FlagSet::new("example");
     /// flags.string("hello", "world".to_string(), "example");
     ///
-    /// let val = flags.value_of::<String>("hello")?;
-    /// assert_eq!(val, "world");
-    /// # Ok::<(), std::convert::Infallible>(())
+    /// let val = flags.value_of::<String>("hello").unwrap();
+    /// assert_eq!(*val, "world");
     /// ```
-    pub fn value_of<T: std::str::FromStr>(&self, name: &str) -> Result<T, T::Err> {
+    pub fn value_of<T: 'static>(&self, name: &str) -> Option<&T> {
         let i = self.formal.get(name).unwrap();
-        self.flags[*i].value.value().parse()
+        self.flags[*i].value.value().downcast_ref::<T>()
     }
 }
 
@@ -737,7 +735,7 @@ mod tests {
         }
 
         assert_eq!(
-            flags.value_of::<String>("hello").unwrap(),
+            *flags.value_of::<String>("hello").unwrap(),
             "world".to_string()
         );
     }
@@ -752,7 +750,7 @@ mod tests {
         }
 
         assert_eq!(
-            flags.value_of::<String>("hello").unwrap(),
+            *flags.value_of::<String>("hello").unwrap(),
             "world".to_string()
         );
     }
@@ -766,7 +764,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("hello").unwrap(), true);
+        assert_eq!(*flags.value_of::<bool>("hello").unwrap(), true);
     }
 
     #[test]
@@ -778,7 +776,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("hello").unwrap(), true);
+        assert_eq!(*flags.value_of::<bool>("hello").unwrap(), true);
     }
 
     #[test]
@@ -790,7 +788,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help").unwrap(), true);
+        assert_eq!(*flags.value_of::<bool>("help").unwrap(), true);
     }
 
     #[test]
@@ -802,7 +800,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help").unwrap(), true);
+        assert_eq!(*flags.value_of::<bool>("help").unwrap(), true);
     }
 
     #[test]
@@ -815,8 +813,8 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help").unwrap(), true);
-        assert_eq!(flags.value_of::<bool>("verbose").unwrap(), true);
+        assert_eq!(*flags.value_of::<bool>("help").unwrap(), true);
+        assert_eq!(*flags.value_of::<bool>("verbose").unwrap(), true);
     }
 
     #[test]
@@ -829,8 +827,8 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<bool>("help").unwrap(), false);
-        assert_eq!(flags.value_of::<bool>("verbose").unwrap(), true);
+        assert_eq!(*flags.value_of::<bool>("help").unwrap(), false);
+        assert_eq!(*flags.value_of::<bool>("verbose").unwrap(), true);
     }
 
     #[test]
@@ -842,7 +840,7 @@ mod tests {
             panic!(err);
         }
 
-        assert_eq!(flags.value_of::<u32>("port").unwrap(), 8080);
+        assert_eq!(*flags.value_of::<u32>("port").unwrap(), 8080);
     }
 
     #[test]
@@ -935,7 +933,7 @@ mod tests {
         }
 
         let int = flags.value_of::<i8>("int").unwrap();
-        assert_eq!(int, 1);
+        assert_eq!(*int, 1);
         assert_eq!(flags.args().len(), 1);
     }
 
@@ -949,7 +947,7 @@ mod tests {
         }
 
         let int = flags.value_of::<i8>("int").unwrap();
-        assert_eq!(int, 1);
+        assert_eq!(*int, 1);
         assert_eq!(flags.args().len(), 1);
     }
 
