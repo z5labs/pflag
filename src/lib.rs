@@ -84,7 +84,7 @@ macro_rules! builtin_flag_val {
             pub fn $name<S: Into<String>, U: Into<String>>(&mut self, name: S, value: $typ, usage: U) {
                 self.add_flag(Flag {
                     name: name.into(),
-                    shorthand: 0 as char,
+                    shorthand: char::default(),
                     usage: usage.into(),
                     value: Box::new(value),
                     def_value: String::new(),
@@ -118,7 +118,7 @@ macro_rules! builtin_flag_val {
             pub fn fn_name<S: Into<String>, U: Into<String>>(&mut self, name: S, value: value::Slice<$typ>, usage: U) {
                 self.add_flag(Flag {
                     name: name.into(),
-                    shorthand: 0 as char,
+                    shorthand: char::default(),
                     usage: usage.into(),
                     value: Box::new(value),
                     def_value: String::new(),
@@ -183,7 +183,7 @@ impl FlagSet {
         self.flags.push(flag);
         self.formal.insert(name, flags_len);
 
-        if shorthand == 0 as char {
+        if shorthand == char::default() {
             return;
         }
 
@@ -260,7 +260,7 @@ impl FlagSet {
         let res = flag.value.set(value.clone());
         if let Err(err) = res {
             let mut flag_name = format!("--{}", flag.name);
-            if flag.shorthand != 0 as char && flag.shorthand_deprecated != "" {
+            if flag.shorthand != char::default() && flag.shorthand_deprecated != "" {
                 flag_name = format!("-{}, --{}", flag.shorthand, flag.shorthand_deprecated);
             }
             return Err(format!(
@@ -453,7 +453,7 @@ impl FlagSet {
     pub fn bool<S: Into<String>, U: Into<String>>(&mut self, name: S, value: bool, usage: U) {
         self.add_flag(Flag {
             name: name.into(),
-            shorthand: 0 as char,
+            shorthand: char::default(),
             usage: usage.into(),
             value: Box::new(value),
             def_value: String::new(),
@@ -494,7 +494,7 @@ impl FlagSet {
     ) {
         self.add_flag(Flag {
             name: name.into(),
-            shorthand: 0 as char,
+            shorthand: char::default(),
             usage: usage.into(),
             value: Box::new(value),
             def_value: String::new(),
@@ -574,7 +574,7 @@ impl FlagSet {
     {
         self.add_flag(Flag {
             name: name.into(),
-            shorthand: 0 as char,
+            shorthand: char::default(),
             usage: usage.into(),
             value: Box::new(value),
             def_value: String::new(),
@@ -636,7 +636,7 @@ impl fmt::Display for FlagSet {
             }
 
             let mut line = format!("      --{}", flag.name);
-            if flag.shorthand != 0 as char && flag.shorthand_deprecated == "" {
+            if flag.shorthand != char::default() && flag.shorthand_deprecated == "" {
                 line = format!("  -{}, --{}", flag.shorthand, flag.name);
             }
 
