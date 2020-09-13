@@ -100,6 +100,23 @@ impl<T> Slice<T> {
     }
 }
 
+impl<T> IntoIterator for Slice<T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.vals.into_iter()
+    }
+}
+
+impl<T> std::iter::FromIterator<T> for Slice<T> {
+    fn from_iter<A: IntoIterator<Item = T>>(iter: A) -> Self {
+        Self {
+            vals: iter.into_iter().collect(),
+            changed: false,
+        }
+    }
+}
+
 impl<T, V: Into<Vec<T>>> From<V> for Slice<T> {
     /// Constructs a Slice<T> from anything a Vec<T> can be constructed from.
     /// This method should be used anytime you desire default values to be set.
@@ -114,7 +131,7 @@ impl<T, V: Into<Vec<T>>> From<V> for Slice<T> {
 impl<E, T> Value for Slice<T>
 where
     E: Error + 'static,
-    T: string::ToString + str::FromStr<Err = E> + 'static,
+    T: str::FromStr<Err = E> + 'static,
 {
     fn typ(&self) -> &str {
         let type_name = std::any::type_name::<T>();

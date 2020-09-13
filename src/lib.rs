@@ -5,9 +5,11 @@
 
 #![feature(type_name_of_val)]
 #![feature(test)]
+#![feature(duration_constants)]
 
 extern crate test;
 
+pub mod time;
 mod value;
 
 pub use value::Slice;
@@ -528,6 +530,90 @@ impl FlagSet {
         })
     }
 
+    #[doc = "Defines a `time::Duration` flag with specified name, default value, and usage string."]
+    pub fn duration<S: Into<String>, U: Into<String>>(
+        &mut self,
+        name: S,
+        value: time::Duration,
+        usage: U,
+    ) {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand: char::default(),
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
+    #[doc = "duration_p is like duration, but accepts a shorthand letter that can be used after a single dash."]
+    pub fn duration_p<S, U>(&mut self, name: S, shorthand: char, value: time::Duration, usage: U)
+    where
+        S: Into<String>,
+        U: Into<String>,
+    {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand,
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
+    #[doc = "duration_slice defines a `Slice<time::Duration>` flag with specified name, default value, and usage string."]
+    pub fn duration_slice<S: Into<String>, U: Into<String>>(
+        &mut self,
+        name: S,
+        value: value::Slice<time::Duration>,
+        usage: U,
+    ) {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand: char::default(),
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
+    #[doc = "duration_p_slice is like duration_slice, but accepts a shorthand letter that can used after a single dash."]
+    pub fn duration_p_slice<S: Into<String>, U: Into<String>>(
+        &mut self,
+        name: S,
+        shorthand: char,
+        value: value::Slice<time::Duration>,
+        usage: U,
+    ) {
+        self.add_flag(Flag {
+            name: name.into(),
+            shorthand,
+            usage: usage.into(),
+            value: Box::new(value),
+            def_value: String::new(),
+            changed: false,
+            no_opt_def_value: String::new(),
+            deprecated: String::new(),
+            hidden: false,
+            shorthand_deprecated: String::new(),
+        })
+    }
+
     builtin_flag_val!(char, char);
     builtin_flag_val!(string, String);
     builtin_flag_val!(uint8, u8);
@@ -949,6 +1035,15 @@ mod tests {
         let int = flags.value_of::<i8>("int").unwrap();
         assert_eq!(*int, 1);
         assert_eq!(flags.args().len(), 1);
+    }
+
+    #[test]
+    fn duration_value() {
+        let mut flags = FlagSet::new("test");
+        flags.duration("time", time::Duration::new(1, 0), "test");
+
+        let val = flags.value_of::<time::Duration>("time").unwrap();
+        assert_eq!(val.as_secs(), 1);
     }
 
     #[bench]
