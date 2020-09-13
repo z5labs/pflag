@@ -15,15 +15,15 @@ use std::time;
 /// leading digit is non-zero. The zero duration formats as 0s.
 ///
 /// ```
-/// use std::time;
-/// use pflag::Value;
+/// use std::str::FromStr;
 /// use pflag::time::Duration;
 ///
-/// let mut d = Duration::default();
-/// d.set("1h1m10.987654321s".to_string());
+/// let d = Duration::from_str("1h1m10.987654321s")?;
+/// let d2 = Duration::new(3670, 987654321);
 ///
-/// assert_eq!(d, Duration::from(time::Duration::new(3670, 987654321)));
+/// assert_eq!(d, d2);
 /// assert_eq!(format!("{}", d), "1h1m10.987654321s");
+/// # Ok::<(), std::num::ParseIntError>(())
 /// ```
 #[derive(Debug, Default, Copy, Clone, PartialEq, PartialOrd)]
 pub struct Duration(time::Duration);
