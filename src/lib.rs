@@ -329,7 +329,7 @@ impl FlagSet {
 
         let mut av = args
             .into_iter()
-            .flat_map(|arg| arg.chars().chain(" ".chars()))
+            .flat_map(|arg| arg.trim_matches(' ').chars().chain(" ".chars()))
             .peekable();
 
         loop {
@@ -344,7 +344,7 @@ impl FlagSet {
                 '-' => {
                     av.next();
                     let arg = av.peek();
-                    if arg.is_none() {
+                    if arg.is_none() || *arg.unwrap() == ' ' {
                         av.next();
                         self.args.push("-".to_string());
                         return Ok(());
@@ -972,6 +972,19 @@ mod tests {
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], "hello");
         assert_eq!(args[1], "world");
+    }
+
+    #[test]
+    fn parse_single_dash_stdin() {
+        let mut flags = FlagSet::new("test");
+
+        if let Err(err) = flags.parse(vec!["-"]) {
+            panic!(err);
+        }
+
+        let args = flags.args();
+        assert_eq!(args.len(), 1);
+        assert_eq!(args[0], "-");
     }
 
     #[test]
