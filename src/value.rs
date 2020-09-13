@@ -145,6 +145,7 @@ where
     fn set(&mut self, val: string::String) -> Result<(), ValueError> {
         if !self.changed {
             self.vals = Vec::with_capacity(self.vals.capacity());
+            self.changed = true;
         }
         val.trim_matches('"').split(',').try_for_each(|v| {
             let res = v.parse::<T>();
