@@ -16,7 +16,7 @@ impl fmt::Display for ValueError {
 impl Error for ValueError {}
 
 /// Value is a trait representing the value stored in a flag.
-pub trait Value {
+pub trait Value: string::ToString {
     /// set sets the underlying value.
     fn set(&mut self, val: string::String) -> Result<(), ValueError>;
 
@@ -37,7 +37,7 @@ pub trait Value {
 impl<E, T> Value for T
 where
     E: Error + 'static,
-    T: str::FromStr<Err = E> + 'static,
+    T: string::ToString + str::FromStr<Err = E> + 'static,
 {
     // typ is reimplemeted in order to leverage any::type_name, which
     // is currently whereas any::type_name_of_val is not.
@@ -131,7 +131,7 @@ impl<T, V: Into<Vec<T>>> From<V> for Slice<T> {
 impl<E, T> Value for Slice<T>
 where
     E: Error + 'static,
-    T: str::FromStr<Err = E> + 'static,
+    T: string::ToString + str::FromStr<Err = E> + 'static,
 {
     fn typ(&self) -> &str {
         let type_name = std::any::type_name::<T>();

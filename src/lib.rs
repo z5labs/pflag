@@ -47,7 +47,6 @@ pub use value::Slice;
 pub use value::Value;
 pub use value::ValueError;
 
-use std::any;
 use std::collections::BTreeMap;
 use std::error;
 use std::fmt;
@@ -117,70 +116,26 @@ macro_rules! builtin_flag_val {
         concat_idents!(fn_short = $name, _, p {
             #[doc = $name " defines a " $typ " flag with specified name, default value, and usage string."]
             pub fn $name<S: Into<String>, U: Into<String>>(&mut self, name: S, value: $typ, usage: U) {
-                self.add_flag(Flag {
-                    name: name.into(),
-                    shorthand: char::default(),
-                    usage: usage.into(),
-                    value: Box::new(value),
-                    def_value: String::new(),
-                    changed: false,
-                    no_opt_def_value: String::new(),
-                    deprecated: String::new(),
-                    hidden: false,
-                    shorthand_deprecated: String::new(),
-                });
+                self.var(name, value, usage)
             }
 
             #[doc = $name "_p is like " $name ", but accepts a shorthand letter that can be used after a single dash."]
             pub fn fn_short<S: Into<String>, U: Into<String>>(&mut self, name: S, shorthand: char, value: $typ, usage: U) {
-                self.add_flag(Flag {
-                    name: name.into(),
-                    shorthand,
-                    usage: usage.into(),
-                    value: Box::new(value),
-                    def_value: String::new(),
-                    changed: false,
-                    no_opt_def_value: String::new(),
-                    deprecated: String::new(),
-                    hidden: false,
-                    shorthand_deprecated: String::new(),
-                });
+                self.var_p(name, shorthand, value, usage)
             }
         });
 
         concat_idents!(fn_name = $name, _, slice  {
             #[doc = $name "_slice defines a `Slice<" $typ ">` flag with specified name, default value, and usage string."]
             pub fn fn_name<S: Into<String>, U: Into<String>>(&mut self, name: S, value: value::Slice<$typ>, usage: U) {
-                self.add_flag(Flag {
-                    name: name.into(),
-                    shorthand: char::default(),
-                    usage: usage.into(),
-                    value: Box::new(value),
-                    def_value: String::new(),
-                    changed: false,
-                    no_opt_def_value: String::new(),
-                    deprecated: String::new(),
-                    hidden: false,
-                    shorthand_deprecated: String::new(),
-                });
+                self.var(name, value, usage)
             }
         });
 
         concat_idents!(fn_name = $name, _, p, _, slice  {
             #[doc = $name "_p_slice is like " $name "_slice, but accepts a shorthand letter that can be used after a single dash."]
             pub fn fn_name<S: Into<String>, U: Into<String>>(&mut self, name: S, shorthand: char, value: value::Slice<$typ>, usage: U) {
-                self.add_flag(Flag {
-                    name: name.into(),
-                    shorthand,
-                    usage: usage.into(),
-                    value: Box::new(value),
-                    def_value: String::new(),
-                    changed: false,
-                    no_opt_def_value: String::new(),
-                    deprecated: String::new(),
-                    hidden: false,
-                    shorthand_deprecated: String::new(),
-                });
+                self.var_p(name, shorthand, value, usage)
             }
         });
         }
@@ -491,7 +446,7 @@ impl FlagSet {
             shorthand: char::default(),
             usage: usage.into(),
             value: Box::new(value),
-            def_value: String::new(),
+            def_value: value.to_string(),
             changed: false,
             no_opt_def_value: String::from("true"),
             deprecated: String::new(),
@@ -511,7 +466,7 @@ impl FlagSet {
             shorthand,
             usage: usage.into(),
             value: Box::new(value),
-            def_value: String::new(),
+            def_value: value.to_string(),
             changed: false,
             no_opt_def_value: String::from("true"),
             deprecated: String::new(),
@@ -527,18 +482,7 @@ impl FlagSet {
         value: value::Slice<bool>,
         usage: U,
     ) {
-        self.add_flag(Flag {
-            name: name.into(),
-            shorthand: char::default(),
-            usage: usage.into(),
-            value: Box::new(value),
-            def_value: String::new(),
-            changed: false,
-            no_opt_def_value: String::new(),
-            deprecated: String::new(),
-            hidden: false,
-            shorthand_deprecated: String::new(),
-        })
+        self.var(name, value, usage)
     }
 
     #[doc = "bool_p_slice is like bool_slice, but accepts a shorthand letter that can used after a single dash."]
@@ -549,18 +493,7 @@ impl FlagSet {
         value: value::Slice<bool>,
         usage: U,
     ) {
-        self.add_flag(Flag {
-            name: name.into(),
-            shorthand,
-            usage: usage.into(),
-            value: Box::new(value),
-            def_value: String::new(),
-            changed: false,
-            no_opt_def_value: String::new(),
-            deprecated: String::new(),
-            hidden: false,
-            shorthand_deprecated: String::new(),
-        })
+        self.var_p(name, shorthand, value, usage)
     }
 
     #[doc = "Defines a `time::Duration` flag with specified name, default value, and usage string."]
@@ -570,18 +503,7 @@ impl FlagSet {
         value: time::Duration,
         usage: U,
     ) {
-        self.add_flag(Flag {
-            name: name.into(),
-            shorthand: char::default(),
-            usage: usage.into(),
-            value: Box::new(value),
-            def_value: String::new(),
-            changed: false,
-            no_opt_def_value: String::new(),
-            deprecated: String::new(),
-            hidden: false,
-            shorthand_deprecated: String::new(),
-        })
+        self.var(name, value, usage)
     }
 
     #[doc = "duration_p is like duration, but accepts a shorthand letter that can be used after a single dash."]
@@ -590,18 +512,7 @@ impl FlagSet {
         S: Into<String>,
         U: Into<String>,
     {
-        self.add_flag(Flag {
-            name: name.into(),
-            shorthand,
-            usage: usage.into(),
-            value: Box::new(value),
-            def_value: String::new(),
-            changed: false,
-            no_opt_def_value: String::new(),
-            deprecated: String::new(),
-            hidden: false,
-            shorthand_deprecated: String::new(),
-        })
+        self.var_p(name, shorthand, value, usage)
     }
 
     #[doc = "duration_slice defines a `Slice<time::Duration>` flag with specified name, default value, and usage string."]
@@ -611,18 +522,7 @@ impl FlagSet {
         value: value::Slice<time::Duration>,
         usage: U,
     ) {
-        self.add_flag(Flag {
-            name: name.into(),
-            shorthand: char::default(),
-            usage: usage.into(),
-            value: Box::new(value),
-            def_value: String::new(),
-            changed: false,
-            no_opt_def_value: String::new(),
-            deprecated: String::new(),
-            hidden: false,
-            shorthand_deprecated: String::new(),
-        })
+        self.var(name, value, usage)
     }
 
     #[doc = "duration_p_slice is like duration_slice, but accepts a shorthand letter that can used after a single dash."]
@@ -633,18 +533,7 @@ impl FlagSet {
         value: value::Slice<time::Duration>,
         usage: U,
     ) {
-        self.add_flag(Flag {
-            name: name.into(),
-            shorthand,
-            usage: usage.into(),
-            value: Box::new(value),
-            def_value: String::new(),
-            changed: false,
-            no_opt_def_value: String::new(),
-            deprecated: String::new(),
-            hidden: false,
-            shorthand_deprecated: String::new(),
-        })
+        self.var_p(name, shorthand, value, usage)
     }
 
     builtin_flag_val!(char, char);
@@ -673,6 +562,8 @@ impl FlagSet {
     /// A helper method for creating flags with a custom `Value` implementation.
     ///
     /// ```
+    /// # use std::fmt;
+    ///
     /// #[derive(Debug)]
     /// pub struct Complex(f64, f64);
     ///
@@ -680,6 +571,12 @@ impl FlagSet {
     ///     fn set(&mut self, _: std::string::String) -> std::result::Result<(), pflag::ValueError> { todo!() }
     ///
     ///     fn value(&self) -> &dyn std::any::Any { self }
+    /// }
+    ///
+    /// impl fmt::Display for Complex {
+    ///     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    ///         write!(f, "{}+{}i", self.0, self.1)
+    ///     }
     /// }
     ///
     /// let mut flags = pflag::FlagSet::new("custom");
@@ -691,12 +588,13 @@ impl FlagSet {
         V: Value + 'static,
         U: Into<String>,
     {
+        let s = value.to_string();
         self.add_flag(Flag {
             name: name.into(),
             shorthand: char::default(),
             usage: usage.into(),
             value: Box::new(value),
-            def_value: String::new(),
+            def_value: s,
             changed: false,
             no_opt_def_value: String::new(),
             deprecated: String::new(),
@@ -712,12 +610,13 @@ impl FlagSet {
         V: Value + 'static,
         U: Into<String>,
     {
+        let s = value.to_string();
         self.add_flag(Flag {
             name: name.into(),
             shorthand,
             usage: usage.into(),
             value: Box::new(value),
-            def_value: String::new(),
+            def_value: s,
             changed: false,
             no_opt_def_value: String::new(),
             deprecated: String::new(),
@@ -1183,16 +1082,16 @@ mod tests {
         }
 
         b.iter(|| {
-            if let None = flags.value_of::<i8>("num") {
+            if let Err(_) = flags.value_of::<i8>("num") {
                 panic!("expected i8 for --num");
             }
-            if let None = flags.value_of::<String>("str") {
+            if let Err(_) = flags.value_of::<String>("str") {
                 panic!("expected String for --str");
             }
-            if let None = flags.value_of::<Slice<bool>>("bool") {
+            if let Err(_) = flags.value_of::<Slice<bool>>("bool") {
                 panic!("expected bool for --bool");
             }
-            if let None = flags.value_of::<Slice<f64>>("floats") {
+            if let Err(_) = flags.value_of::<Slice<f64>>("floats") {
                 panic!("expected Slice<f64> for --floats");
             }
         });
