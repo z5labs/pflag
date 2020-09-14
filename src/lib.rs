@@ -47,6 +47,7 @@ pub use value::Slice;
 pub use value::Value;
 pub use value::ValueError;
 
+use std::any::TypeId;
 use std::collections::BTreeMap;
 use std::error;
 use std::fmt;
@@ -90,13 +91,48 @@ pub struct Flag {
     pub shorthand_deprecated: String,
 }
 
+macro_rules! const_type_id {
+    ($name:ident, $typ:ty) => {
+        const $name: TypeId = TypeId::of::<$typ>();
+    };
+}
+
+const_type_id!(BOOL_ID, bool);
+const_type_id!(STRING_ID, String);
+const_type_id!(DURATION_ID, time::Duration);
+const_type_id!(U8_ID, u8);
+const_type_id!(U16_ID, u16);
+const_type_id!(U32_ID, u32);
+const_type_id!(U64_ID, u64);
+const_type_id!(I8_ID, i8);
+const_type_id!(I16_ID, i16);
+const_type_id!(I32_ID, i32);
+const_type_id!(I64_ID, i64);
+const_type_id!(F32_ID, f32);
+const_type_id!(F64_ID, f64);
+const_type_id!(IP_ADDR_ID, IpAddr);
+const_type_id!(IP_V4_ADDR_ID, Ipv4Addr);
+const_type_id!(IP_V6_ADDR_ID, Ipv6Addr);
+
 impl Flag {
     pub fn set(&mut self, val: String) -> Result<(), ValueError> {
         self.value.set(val)
     }
 
     fn default_is_zero_value(&self) -> bool {
-        self.def_value == ""
+        let def_value = self.def_value.clone();
+        let id = self.value.value().type_id();
+        match id {
+            BOOL_ID => def_value == "false",
+            DURATION_ID => def_value == "0" || def_value == "0s",
+            U8_ID | U16_ID | U32_ID | U64_ID | I8_ID | I16_ID | I32_ID | I64_ID | F32_ID
+            | F64_ID => def_value == "0",
+            STRING_ID => def_value == "",
+            IP_ADDR_ID | IP_V4_ADDR_ID | IP_V6_ADDR_ID => {
+                def_value == "0.0.0.0" || def_value == "0:0:0:0:0:0:0:0"
+            }
+            _ => def_value == "" || def_value == "[]" || def_value == "0" || def_value == "false",
+        }
     }
 }
 
