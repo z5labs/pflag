@@ -47,7 +47,9 @@ pub use value::Slice;
 pub use value::Value;
 pub use value::ValueError;
 
+use std::any;
 use std::collections::BTreeMap;
+use std::error;
 use std::fmt;
 use std::iter::Peekable;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
@@ -733,9 +735,44 @@ impl FlagSet {
     /// let val = flags.value_of::<String>("hello").unwrap();
     /// assert_eq!(*val, "world");
     /// ```
-    pub fn value_of<T: 'static>(&self, name: &str) -> Option<&T> {
-        let i = self.formal.get(name).unwrap();
-        self.flags[*i].value.value().downcast_ref::<T>()
+    pub fn value_of<T: 'static>(&self, name: &str) -> Result<&T, UnknownFlag> {
+        let i = self
+            .formal
+            .get(name)
+            .ok_or(format!("flag does not exist: {}", name))?;
+        self.flags[*i]
+            .value
+            .value()
+            .downcast_ref::<T>()
+            .ok_or_else(|| {
+                let type_name = std::any::type_name_of_val(self);
+                let t_name = &type_name[(type_name
+                    .rfind(':')
+                    .map(|v| v as isize)
+                    .unwrap_or_else(|| -1)
+                    + 1) as usize..];
+                let msg = format!("unable to downcast to type: {}", t_name);
+                UnknownFlag::from(msg)
+            })
+    }
+}
+
+/// UnknownFlag represents the lookup or invalid
+/// downcasting of an unknown flag.
+#[derive(Debug)]
+pub struct UnknownFlag(String);
+
+impl error::Error for UnknownFlag {}
+
+impl fmt::Display for UnknownFlag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown flag error: {}", self.0)
+    }
+}
+
+impl<T: Into<String>> From<T> for UnknownFlag {
+    fn from(s: T) -> Self {
+        Self(s.into())
     }
 }
 
