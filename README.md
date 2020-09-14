@@ -1,3 +1,5 @@
+[![Documentation](https://docs.rs/pflag/badge.svg)](https://docs.rs/pflag)
+
 # pflag
 
 `pflag` is a port of the [spf13](https://github.com/spf13/pflag)'s popular fork of the
