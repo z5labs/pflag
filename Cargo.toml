@@ -1,7 +1,7 @@
 [package]
 name = "pflag"
 description = "A crate implementing POSIX/GNU-style --flags."
-version = "0.6.1"
+version = "0.6.2"
 keywords = ["command-line", "flags", "args"]
 categories = ["command-line-interface"]
 authors = ["z5labs"]
