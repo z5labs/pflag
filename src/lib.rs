@@ -34,6 +34,7 @@
 //! assert_eq!(args[0], "subcommand");
 //! ```
 
+#![feature(const_type_id)]
 #![feature(type_name_of_val)]
 #![feature(test)]
 #![feature(duration_constants)]
